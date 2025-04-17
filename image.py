@@ -1,24 +1,20 @@
 import streamlit as st
 import zipfile
 import os
-import shutil
-import time
-import cv2
-import pandas as pd
-from process_damar_analizi import process_images  # process_damar_analizi.py dosyasından fonksiyonlar
+from process_damar_analizi import process_images  # process_damar_analizi.py dosyasından fonksiyonu içeri alıyoruz
 
 # Başlık
 st.title("Damar Görüntüleme ve Kümeleme")
 
-# Kullanıcıdan zip dosyası alma
+# Zip dosyasını yükleme
 uploaded_file = st.file_uploader("Zip dosyasını yükleyin", type=["zip"])
 
-# Zip dosyasını açma ve içerikleri işleme
+# Zip dosyasını çıkarma ve görselleri işleme
 if uploaded_file is not None:
     st.write("Zip dosyası alındı. İşlem başlatılıyor...")
 
-    # Yüklenen dosyayı geçici bir dosyaya kaydedelim
-    temp_zip_path = "/tmp/uploaded_file.zip"  # Geçici dosya yolu
+    # Geçici zip dosyasını kaydedelim
+    temp_zip_path = "/tmp/uploaded_file.zip"
     with open(temp_zip_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
 
@@ -33,7 +29,7 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"Zip dosyası çıkarılırken hata oluştu: {str(e)}")
 
-    # Görseller çıkarıldıktan sonra analiz butonunu ekleyelim
+    # Görselleri işleme butonu
     if st.button("Analiz Et"):
         # Progress bar'ı başlat
         progress_bar = st.progress(0)
@@ -41,7 +37,7 @@ if uploaded_file is not None:
         
         st.write("Görseller işleniyor...")
         
-        # Görselleri işleme fonksiyonunu burada çağırıyoruz
+        # Görselleri işleme işlemini başlat
         analyze_images(unzip_folder, "final_vessel_analysis", progress_bar, status_text)
 
         st.write("Analiz tamamlandı!")
@@ -62,7 +58,7 @@ def analyze_images(input_folder, output_folder, progress_bar, status_text):
             # Görseli işleme ve analiz fonksiyonu
             if img is not None:
                 try:
-                    # process_images fonksiyonu, damar tespiti, analiz, görselleştirme ve CSV kaydetme işlemleri içeriyor
+                    # process_images fonksiyonu burada çağrılır
                     result = process_images(img, filename, output_folder)
 
                     # Sonuçları kaydetme (isteğe bağlı olarak görselleştirme)
