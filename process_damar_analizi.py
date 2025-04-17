@@ -2,28 +2,34 @@ import os
 import cv2
 import numpy as np
 import pandas as pd
-from skimage.filters import frangi, meijering, threshold_multiotsu
+from skimage.filters import frangi, meijering
 from skimage.morphology import skeletonize, disk
+from skimage.measure import regionprops
+from skimage.segmentation import clear_border
 from scipy.ndimage import distance_transform_edt
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+import seaborn as sns
 
-# Damar tespiti fonksiyonu (örnek bir işlem)
+# Damar tespiti fonksiyonu (Frangi ve Meijering filtreleri)
 def enhanced_vessel_detection(img):
     # Frangi filtrasyonu ve damar tespiti işlemleri
-    # Bu kısmı gerçek işleme kodunuza göre uyarlayabilirsiniz
-    thin_mask = np.zeros_like(img)
-    thick_mask = np.zeros_like(img)
-    combined = np.zeros_like(img)
+    thin_mask = frangi(img)  # İnce damarları tespit et
+    thick_mask = meijering(img)  # Kalın damarları tespit et
+    combined = np.logical_or(thin_mask, thick_mask)  # İnce ve kalın damarları birleştir
     return thin_mask, thick_mask, combined
 
 # İskelet analiz fonksiyonu
 def safe_skeleton_analysis(mask):
     skeleton = skeletonize(mask)
-    stats = {'branch-distance': np.random.rand(10)}  # Bu, gerçek hesaplamaya göre değişir
+    properties = regionprops(skeleton.astype(int))
+    stats = {'branch-distance': [p.equivalent_diameter for p in properties]}  # Dal uzunluğu hesaplama
     return stats, skeleton
 
-# Görsel işleme fonksiyonu
+# Görsel işleme ve analiz fonksiyonu
 def process_images(input_folder, output_folder):
     os.makedirs(output_folder, exist_ok=True)
     results = []
@@ -38,8 +44,11 @@ def process_images(input_folder, output_folder):
             if img is None:
                 continue
 
+            # Görüntüyü gri tonlara çevir
+            gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
             # 1. Damar tespiti
-            thin_mask, thick_mask, combined = enhanced_vessel_detection(img)
+            thin_mask, thick_mask, combined = enhanced_vessel_detection(gray_img)
 
             # 2. İskelet analizi
             thin_stats, _ = safe_skeleton_analysis(thin_mask)
@@ -47,8 +56,8 @@ def process_images(input_folder, output_folder):
 
             # 3. Metrik hesaplama
             if thin_stats is not None and thick_stats is not None:
-                thin_length = thin_stats['branch-distance'].sum()
-                thick_length = thick_stats['branch-distance'].sum()
+                thin_length = thin_stats['branch-distance'].sum() if 'branch-distance' in thin_stats else 0
+                thick_length = thick_stats['branch-distance'].sum() if 'branch-distance' in thick_stats else 0
 
                 # 4. Kalınlık haritası
                 distance = distance_transform_edt(np.logical_or(thin_mask, thick_mask))
@@ -102,13 +111,15 @@ def process_images(input_folder, output_folder):
             print(f"Hata: {filename} - {str(e)}")
 
     if processed_count > 0:
-        pd.DataFrame(results).to_csv(os.path.join(output_folder, 'results.csv'), index=False)
-        print(f"{processed_count} görsel başarıyla işlendi!")
+        result_df = pd.DataFrame(results)
+        output_csv = os.path.join(output_folder, 'results.csv')
+        result_df.to_csv(output_csv, index=False)
+        print(f"{processed_count} görsel başarıyla işlendi ve sonuçlar {output_csv} dosyasına kaydedildi!")
     else:
         print("Hiçbir görsel işlenemedi!")
 
 # Kümeleme analizi fonksiyonu
-def cluster_analysis(input_file):
+def cluster_analysis(input_file, output_folder):
     df = pd.read_csv(input_file)
 
     features = ['Total_Vessel_Length', 'Thin_Vessel_Length', 'Thick_Vessel_Length', 'Avg_Thickness', 'Total_Branches']
@@ -142,7 +153,11 @@ def cluster_analysis(input_file):
     plt.ylabel("PCA2")
     plt.legend(title='Küme')
     plt.tight_layout()
-    plt.savefig("cluster_visualization.png", dpi=150)
+    cluster_image_path = os.path.join(output_folder, "cluster_visualization.png")
+    plt.savefig(cluster_image_path, dpi=150)
     plt.show()
 
-    df.to_csv("clustered_vessel_data.csv", index=False)
+    # CSV dosyasına kaydet
+    clustered_data_path = os.path.join(output_folder, "clustered_vessel_data.csv")
+    df.to_csv(clustered_data_path, index=False)
+    print(f"Kümeleme sonuçları {cluster_image_path} ve {clustered_data_path} dosyalarına kaydedildi.")
