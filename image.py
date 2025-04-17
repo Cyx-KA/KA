@@ -1,19 +1,14 @@
 import os
-import time
 import zipfile
-import cv2
-import streamlit as st
-from process_damar_analizi import process_images  # process_images fonksiyonunuz
 import tempfile
+import streamlit as st
+from process_damar_analizi import process_images
 import shutil
+import pandas as pd
 
-# Eksik olan analyze_images fonksiyonunu tanımlayalım
 def analyze_images(input_folder, output_folder, progress_bar=None, status_text=None):
     """Görüntüleri işleyip analiz eden ana fonksiyon"""
     try:
-        # Çıktı klasörünü oluştur
-        os.makedirs(output_folder, exist_ok=True)
-        
         # Görüntü dosyalarını listele
         image_files = [f for f in os.listdir(input_folder) 
                      if f.lower().endswith(('.png', '.jpg', '.jpeg', '.tif', '.tiff'))]
@@ -33,13 +28,10 @@ def analyze_images(input_folder, output_folder, progress_bar=None, status_text=N
             if status_text:
                 status_text.text(f"İşleniyor: {filename} ({i+1}/{total})")
             
-            # Görseli işle
+            # Görseli işle (output_folder parametresi ekledik)
             img_path = os.path.join(input_folder, filename)
-            result_img, csv_data = process_images(img_path)  # Sizin fonksiyonunuz
+            result_img, csv_data = process_images(img_path, output_folder)  # output_folder eklendi
             
-            # Sonuçları kaydet
-            output_path = os.path.join(output_folder, f"result_{filename}")
-            cv2.imwrite(output_path, result_img)
             results.append(csv_data.iloc[0].to_dict())
         
         # CSV'yi kaydet
@@ -51,6 +43,7 @@ def analyze_images(input_folder, output_folder, progress_bar=None, status_text=N
     except Exception as e:
         if status_text:
             status_text.text(f"Hata: {str(e)}")
+        st.error(f"Analiz hatası: {str(e)}")
         return False
 
 # Streamlit arayüzü
@@ -73,7 +66,7 @@ if uploaded_file:
                 status_text = st.empty()
                 
                 # Çıktı klasörü
-                output_dir = "output_folder"
+                output_dir = "final_vessel_analysis"
                 os.makedirs(output_dir, exist_ok=True)
                 
                 # Analiz işlemi
@@ -83,22 +76,24 @@ if uploaded_file:
                     # Sonuçları göster
                     st.subheader("İşlenmiş Görseller")
                     result_files = [f for f in os.listdir(output_dir) 
-                                  if f.startswith('result_') and f.lower().endswith(('.png', '.jpg'))]
+                                  if not f.endswith('.csv')]  # CSV hariç tüm dosyalar
                     
                     cols = st.columns(3)
                     for idx, img_file in enumerate(result_files):
                         with cols[idx % 3]:
                             st.image(os.path.join(output_dir, img_file), 
-                                   caption=img_file.replace('result_', ''))
+                                   caption=img_file)
                     
                     # CSV indirme butonu
-                    with open(os.path.join(output_dir, "results.csv"), "rb") as f:
-                        st.download_button(
-                            label="Sonuçları İndir (CSV)",
-                            data=f,
-                            file_name="damar_analiz_sonuclari.csv",
-                            mime="text/csv"
-                        )
+                    csv_path = os.path.join(output_dir, "results.csv")
+                    if os.path.exists(csv_path):
+                        with open(csv_path, "rb") as f:
+                            st.download_button(
+                                label="Sonuçları İndir (CSV)",
+                                data=f,
+                                file_name="damar_analiz_sonuclari.csv",
+                                mime="text/csv"
+                            )
                 else:
                     st.error("Analiz sırasında hata oluştu!")
                     
