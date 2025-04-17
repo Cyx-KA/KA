@@ -12,7 +12,6 @@ from tqdm import tqdm
 import tempfile
 import shutil
 from sklearn.cluster import KMeans
-from skimage.morphology import remove_small_objects
 
 
 # Gelişmiş damar tespiti fonksiyonu
@@ -35,9 +34,6 @@ def enhanced_vessel_detection(image):
     thin_mask = (regions == 2) if len(np.unique(regions)) > 1 else (regions == 1)
     thick_mask = (regions >= 1)
 
-    # Küçük damarları temizle
-    thin_mask = remove_small_objects(thin_mask, min_size=300)
-    thick_mask = remove_small_objects(thick_mask, min_size=500)
 
     return thin_mask, thick_mask, combined
 
