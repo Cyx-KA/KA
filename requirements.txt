@@ -6,3 +6,4 @@ matplotlib
 scikit-image
 tqdm
 skan
+seaborn
