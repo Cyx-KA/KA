@@ -103,15 +103,19 @@ def safe_skeleton_analysis(mask, min_length=500):
         return pd.DataFrame(), np.zeros_like(mask, dtype=bool)
 # Kümeleme fonksiyonu (KMeans)
 def cluster_vessels(stats, num_clusters=3):
-    # Kümeleme için damar uzunlukları ve dallanma mesafelerini özellik olarak kullanacağız
-    features = np.array([stats['branch-distance']])
-    features = features.T  # Transpose ederek her satır bir özellik vektörü olacak şekilde düzenliyoruz
+    if len(stats) < 2:
+        stats['Cluster'] = 0  # Kümeleme yapma, tek küme ver
+        return stats, None
+
+    n_clusters = min(num_clusters, len(stats))
+    features = np.array([stats['branch-distance']]).T
     
-    kmeans = KMeans(n_clusters=num_clusters, random_state=42)
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
     clusters = kmeans.fit_predict(features)
     
     stats['Cluster'] = clusters
     return stats, kmeans
+
 
 import os
 
