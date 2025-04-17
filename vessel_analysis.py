@@ -1,73 +1,85 @@
 import cv2
 import numpy as np
-import pandas as pd
 import os
-from skimage.filters import frangi
+from tqdm import tqdm
+from skimage.filters import frangi, meijering, threshold_multiotsu
 from skimage.morphology import skeletonize
 from scipy.ndimage import distance_transform_edt
-from skan import Skeleton
-import logging
+from skan import Skeleton, summarize
+import pandas as pd
+import matplotlib.pyplot as plt
 
-# Streamlit cache yerine basit bir cache mekanizması
-_cache = {}
-
-def process_single_image(img_path):
-    """Optimize edilmiş damar analizi fonksiyonu"""
+def enhanced_vessel_detection(image):
+    """Gelişmiş damar tespiti fonksiyonu"""
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(16,16))
+    l_channel = clahe.apply(lab[:,:,0])
+    thin_vessels = frangi(l_channel, sigmas=range(1,4), alpha=0.5, beta=0.5, gamma=15)
+    thick_vessels = frangi(l_channel, sigmas=range(3,8), alpha=0.5, beta=0.5, gamma=10)
+    meijering_img = meijering(l_channel, sigmas=range(1,4), black_ridges=False)
+    combined = 0.5*thin_vessels + 0.3*thick_vessels + 0.2*meijering_img
     try:
-        # Önbellek kontrolü
-        if img_path in _cache:
-            return _cache[img_path]
-            
-        img = cv2.imread(img_path)
-        if img is None:
-            raise ValueError(f"Geçersiz görüntü: {img_path}")
+        thresholds = threshold_multiotsu(combined)
+        regions = np.digitize(combined, bins=thresholds)
+    except:
+        regions = np.digitize(combined, bins=[combined.mean()])
+    thin_mask = (regions == 2) if len(np.unique(regions)) > 1 else (regions == 1)
+    thick_mask = (regions >= 1)
+    return thin_mask, thick_mask, combined
 
-        # Boyut standardizasyonu
-        img = cv2.resize(img, (1024, 1024))
-        
-        # Damar tespiti
-        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
-        l_channel = clahe.apply(lab[:,:,0])
-        
-        thin = frangi(l_channel, sigmas=range(1,3))
-        thick = frangi(l_channel, sigmas=range(3,6))
-        combined = 0.6*thin + 0.4*thick
-        
-        # Maskeler
-        thresh = np.percentile(combined, 95)
-        thin_mask = combined > thresh
-        thick_mask = combined > (thresh * 1.2)
-        
-        # Metrikler
-        thin_skel = skeletonize(thin_mask)
-        thick_skel = skeletonize(thick_mask)
-        
-        metrics = {
-            "Image": os.path.basename(img_path),
-            "Total_Vessel_Length": np.sum(thin_skel) + np.sum(thick_skel),
-            "Thin_Vessel_Length": np.sum(thin_skel),
-            "Thick_Vessel_Length": np.sum(thick_skel),
-            "Avg_Thickness": distance_transform_edt(thick_mask).mean(),
-            "Total_Branches": len(np.unique(Skeleton(thick_skel).graph['edge'].ravel()))
-        }
-        
-        # Görselleştirme
-        result_img = img.copy()
-        result_img[thin_mask] = [255, 0, 0]  # BGR: Mavi
-        result_img[thick_mask] = [0, 0, 255]  # BGR: Kırmızı
-        
-        # Önbelleğe al
-        _cache[img_path] = (result_img, pd.DataFrame([metrics]))
-        return result_img, pd.DataFrame([metrics])
-        
+def safe_skeleton_analysis(mask, min_length=500):
+    try:
+        skeleton = skeletonize(mask)
+        skeleton_obj = Skeleton(skeleton)
+        stats = summarize(skeleton_obj, separator='-')
+        long_branches = stats[stats['branch-distance'] > min_length]
+        long_vessels_mask = np.zeros_like(mask, dtype=bool)
+        for _, branch in long_branches.iterrows():
+            coords = branch['image-coord']
+            for coord in coords:
+                long_vessels_mask[int(coord[0]), int(coord[1])] = True
+        return stats, long_vessels_mask
     except Exception as e:
-        logging.error(f"Hata: {str(e)}")
-        return np.zeros((256,256,3), pd.DataFrame({
-            "Image": [os.path.basename(img_path)],
-            "Total_Vessel_Length": [0],
-            "Thin_Vessel_Length": [0],
-            "Thick_Vessel_Length": [0],
-            "Avg_Thickness": [0],
-            "Total_Branches": [0]
-        })
+        print(f"Skeleton analiz hatası: {str(e)}")
+        return None, None
+
+def process_images(input_folder, output_folder):
+    os.makedirs(output_folder, exist_ok=True)
+    results = []
+    processed_count = 0
+    for filename in tqdm(sorted(os.listdir(input_folder)), desc="Damar Analizi"):
+        if not filename.lower().endswith(('.tif', '.tiff', '.jpg', '.jpeg', '.png')):
+            continue
+        try:
+            img = cv2.imread(os.path.join(input_folder, filename))
+            if img is None:
+                continue
+            thin_mask, thick_mask, combined = enhanced_vessel_detection(img)
+            thin_stats, _ = safe_skeleton_analysis(thin_mask)
+            thick_stats, _ = safe_skeleton_analysis(thick_mask)
+            if thin_stats is not None and thick_stats is not None:
+                thin_length = thin_stats['branch-distance'].sum()
+                thick_length = thick_stats['branch-distance'].sum()
+                distance = distance_transform_edt(np.logical_or(thin_mask, thick_mask))
+                thickness_map = distance * np.logical_or(thin_mask, thick_mask)
+                results.append({
+                    'Image': filename,
+                    'Total_Vessel_Length': thin_length + thick_length,
+                    'Thin_Vessel_Length': thin_length,
+                    'Thick_Vessel_Length': thick_length,
+                    'Avg_Thickness': np.mean(thickness_map[np.logical_or(thin_mask, thick_mask)]) * 2,
+                    'Total_Branches': len(thin_stats) + len(thick_stats)
+                })
+                processed_count += 1
+        except Exception as e:
+            print(f"Hata: {filename} - {str(e)}")
+    if processed_count > 0:
+        pd.DataFrame(results).to_csv(os.path.join(output_folder, 'results.csv'), index=False)
+        print(f"\n✅ {processed_count} görsel başarıyla işlendi! Sonuçlar: {output_folder}")
+    else:
+        print("\n⚠️ Hiçbir görsel işlenemedi!")
+
+# Ana işlem akışını başlatın
+input_folder = "input_images"
+output_folder = "final_vessel_analysis"
+process_images(input_folder, output_folder)
