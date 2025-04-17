@@ -134,43 +134,45 @@ def main():
     st.title('Damar Analizi')
     st.write('Lütfen analiz için görsellerinizi içeren bir klasör yükleyin.')
     
-    uploaded_folder = st.file_uploader("Görsel klasörünü yükleyin", type=['zip'], accept_multiple_files=False)
+    uploaded_folder = st.file_uploader("Görsel klasörünü yükleyin (ZIP formatında)", type=['zip'], accept_multiple_files=False)
     
     if uploaded_folder is not None:
-        # Zip dosyasını çöz
+        # ZIP dosyasını çözmek
         with open("uploaded_folder.zip", "wb") as f:
             f.write(uploaded_folder.getbuffer())
         
         shutil.unpack_archive("uploaded_folder.zip", "uploaded_folder")
-        st.write("Görseller başarıyla yüklendi.")
+        st.write("Görseller başarıyla yüklendi. Şimdi analiz için butona tıklayın.")
         
-        input_folder = "uploaded_folder"
-        output_folder = "final_vessel_analysis"
-        
-        # Görselleri işle
-        results, output_folder = process_images(input_folder, output_folder)
-        
-        # Sonuçları göster
-        st.write("Sonuçlar:")
-        st.dataframe(results)
-        
-        # Görselleri göster
-        for result in results:
-            img_path = os.path.join(output_folder, f'result_{result["Image"]}.png')
-            st.image(img_path, caption=result["Image"], use_container_width=True)
-        
-        # Zip dosyasını oluştur ve indir
-        zip_filename = f"{output_folder}.zip"
-        with ZipFile(zip_filename, 'w') as zipf:
-            for filename in os.listdir(output_folder):
-                zipf.write(os.path.join(output_folder, filename), filename)
-        
-        st.download_button(
-            label="Sonuçları İndir",
-            data=open(zip_filename, "rb").read(),
-            file_name=zip_filename,
-            mime="application/zip"
-        )
+        # Kullanıcı analize başlamak için buton tıklamalı
+        if st.button("Analizi Başlat"):
+            input_folder = "uploaded_folder"
+            output_folder = "final_vessel_analysis"
+            
+            # Görselleri işle
+            results, output_folder = process_images(input_folder, output_folder)
+            
+            # Sonuçları göster
+            st.write("Sonuçlar:")
+            st.dataframe(results)
+            
+            # Görselleri göster
+            for result in results:
+                img_path = os.path.join(output_folder, f'result_{result["Image"]}.png')
+                st.image(img_path, caption=result["Image"], use_container_width=True)
+            
+            # Zip dosyasını oluştur ve indir
+            zip_filename = f"{output_folder}.zip"
+            with ZipFile(zip_filename, 'w') as zipf:
+                for filename in os.listdir(output_folder):
+                    zipf.write(os.path.join(output_folder, filename), filename)
+            
+            st.download_button(
+                label="Sonuçları İndir",
+                data=open(zip_filename, "rb").read(),
+                file_name=zip_filename,
+                mime="application/zip"
+            )
 
 if __name__ == "__main__":
     main()
