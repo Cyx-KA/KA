@@ -119,7 +119,7 @@ def cluster_vessels(stats, num_clusters=3):
 
 import os
 
-def process_images(input_images, uploaded_files):
+def process_images(input_images, uploaded_files, min_branch_length=150):
     results = []
     processed_count = 0
     for idx, img in tqdm(enumerate(input_images), total=len(input_images), desc="Damar Analizi"):
@@ -135,8 +135,8 @@ def process_images(input_images, uploaded_files):
             thin_mask, thick_mask, combined = enhanced_vessel_detection(img_array)
             
             # İskelet analizi
-            thin_stats, _ = safe_skeleton_analysis(thin_mask, min_length=150)
-            thick_stats, _ = safe_skeleton_analysis(thick_mask, min_length=150)
+            thin_stats, _ = safe_skeleton_analysis(thin_mask, min_length=min_branch_length)
+            thick_stats, _ = safe_skeleton_analysis(thick_mask, min_length=min_branch_length)
 
         
             # Metrik hesaplama
@@ -228,11 +228,15 @@ def main():
     if uploaded_files:
         filenames = [file.name for file in uploaded_files]
         images = [cv2.imdecode(np.frombuffer(file.read(), np.uint8), cv2.IMREAD_COLOR) for file in uploaded_files]
-        
+
+        st.markdown("**Minimum damar uzunluğu filtresi (px):**")
+        min_branch_length = st.slider("Kısa damarları dışlamak için eşik değeri", min_value=0, max_value=1000, value=150, step=10)
+
         # Analiz butonu
         if st.button("Analiz Et"):
             with st.spinner("Görseller işleniyor..."):
-                results = process_images(images, filenames)
+                results = process_images(images, filenames, min_branch_length=min_branch_length)
+
             
             if results is not None:
                 st.subheader("Sonuçlar")
