@@ -16,7 +16,7 @@ from sklearn.cluster import KMeans
 # Gelişmiş damar tespiti fonksiyonu
 def enhanced_vessel_detection(image):
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(16,16))
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16,16))
     l_channel = clahe.apply(lab[:,:,0])
     
     thin_vessels = frangi(l_channel, sigmas=range(1,4), alpha=0.5, beta=0.5, gamma=15)
