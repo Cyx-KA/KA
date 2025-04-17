@@ -5,3 +5,5 @@ numpy
 matplotlib
 scikit-image
 tqdm
+opencv-python
+skan
