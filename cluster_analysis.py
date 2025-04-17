@@ -12,7 +12,6 @@ def cluster_analysis(results_file):
     # Kullanılacak metrikleri seç
     features = ['Total_Vessel_Length', 'Thin_Vessel_Length', 'Thick_Vessel_Length',
                 'Avg_Thickness', 'Total_Branches']
-
     X = df[features].copy()
 
     # Normalize et
@@ -35,6 +34,7 @@ def cluster_analysis(results_file):
     # Görselleştir
     plt.figure(figsize=(10,7))
     sns.scatterplot(data=df, x='PCA1', y='PCA2', hue='Cluster', palette='Set1', s=100)
+
     for i, row in df.iterrows():
         plt.text(row['PCA1']+0.05, row['PCA2']+0.05, row['Image'], fontsize=9)
 
@@ -48,7 +48,3 @@ def cluster_analysis(results_file):
 
     # Yeni CSV olarak kaydet
     df.to_csv("clustered_vessel_data.csv", index=False)
-
-if __name__ == "__main__":
-    results_file = "final_vessel_analysis/results.csv"
-    cluster_analysis(results_file)
