@@ -1,77 +1,38 @@
 import streamlit as st
-import zipfile
 import os
-import tempfile
-import pandas as pd
-from vessel_analysis import process_single_image
-from cluster_analysis import perform_clustering
-import matplotlib.pyplot as plt
-import shutil
+from PIL import Image
+from subprocess import call
 
-# Streamlit cache problemi çözümü
-if not hasattr(st, 'already_started'):
-    st.already_started = True
-    st.set_page_config(
-        layout="wide",
-        page_title="Damar Analizi",
-        page_icon="🔬"
-    )
+# Başlık
+st.title("Damar Analizi ve Kümeleme")
 
-st.title("🔬 Damar Analizi ve Kümeleme")
+# Kullanıcıdan giriş klasörünü al
+input_folder = st.text_input("Görüntülerin bulunduğu klasörü girin", "input_images")
 
-def safe_extract(uploaded_zip):
-    """Güvenli ZIP çıkarma"""
-    try:
-        temp_dir = tempfile.mkdtemp()
-        with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
-            zip_ref.extractall(temp_dir)
-        return temp_dir
-    except Exception as e:
-        st.error(f"ZIP açma hatası: {str(e)}")
-        return None
+# Çıkış klasörünü belirt
+output_folder = "final_vessel_analysis"
 
-uploaded_zip = st.file_uploader("📤 ZIP Yükle", type="zip")
+# Görselleri listeleme
+if os.path.exists(input_folder):
+    files = [f for f in os.listdir(input_folder) if f.lower().endswith(('.tif', '.tiff', '.jpg', '.jpeg', '.png'))]
+    st.write(f"Toplamda {len(files)} görsel mevcut.")
+else:
+    st.error("Girdi klasörü bulunamadı.")
 
-if uploaded_zip:
-    temp_dir = safe_extract(uploaded_zip)
-    if temp_dir:
-        try:
-            image_files = [f for f in os.listdir(temp_dir) 
-                         if f.lower().endswith(('.png', '.jpg', '.tif'))]
-            
-            if not image_files:
-                st.warning("ZIP içinde uygun görsel bulunamadı!")
-            else:
-                results = []
-                cols = st.columns(4)
-                
-                for idx, img_file in enumerate(image_files):
-                    img_path = os.path.join(temp_dir, img_file)
-                    result_img, csv_data = process_single_image(img_path)
-                    
-                    with cols[idx % 4]:
-                        with st.expander(f"📷 {img_file}", expanded=False):
-                            st.image(result_img, use_column_width=True)
-                            st.download_button(
-                                label="📊 CSV İndir",
-                                data=csv_data.to_csv(index=False),
-                                file_name=f"{os.path.splitext(img_file)[0]}.csv",
-                                mime="text/csv"
-                            )
-                    results.append(csv_data.iloc[0].to_dict())
-                
-                if results:
-                    df = pd.DataFrame(results)
-                    clustered_df, fig = perform_clustering(df)
-                    
-                    st.header("🧩 Kümeleme Sonuçları")
-                    st.pyplot(fig)
-                    
-                    st.download_button(
-                        label="💾 Tüm Sonuçları İndir",
-                        data=clustered_df.to_csv(index=False),
-                        file_name="damar_kumeleme.csv",
-                        mime="text/csv"
-                    )
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+# Görselleri küçük resim olarak göster
+for file in files:
+    img_path = os.path.join(input_folder, file)
+    image = Image.open(img_path)
+    st.image(image, caption=file, use_container_width=True)
+
+# Analiz butonu
+if st.button("Analizi Başlat"):
+    # Damar analizi işlemini çağırma
+    st.write("Damar analizi başlatılıyor...")
+    call(["python", "vessel_analysis.py", input_folder, output_folder])
+    
+    # Kümeleme analizi işlemini çağırma
+    st.write("Kümeleme analizi başlatılıyor...")
+    call(["python", "cluster_analysis.py", os.path.join(output_folder, "results.csv")])
+
+    st.success("Analiz tamamlandı!")
