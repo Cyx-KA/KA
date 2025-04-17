@@ -1,10 +1,11 @@
 import streamlit as st
 import zipfile
 import os
-import cv2
-import numpy as np
 import shutil
 import time
+import cv2
+import pandas as pd
+from process_damar_analizi import process_images  # process_damar_analizi.py dosyasından fonksiyonlar
 
 # Başlık
 st.title("Damar Görüntüleme ve Kümeleme")
@@ -58,17 +59,17 @@ def analyze_images(input_folder, output_folder, progress_bar, status_text):
             img_path = os.path.join(input_folder, filename)
             img = cv2.imread(img_path)
             
-            # Görselin işlenmesi ve analiz edilmesi işlemleri
+            # Görseli işleme ve analiz fonksiyonu
             if img is not None:
-                # Örnek işlem: Görseli Streamlit üzerinden göster
-                st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), caption=filename)
-                
-                # Örneğin, damar tespiti, iskelet analizi gibi daha karmaşık işlemleri buraya ekleyebilirsiniz
-                # Bu kodu aşağıdaki şekilde genişletebilirsiniz.
+                try:
+                    # process_images fonksiyonu, damar tespiti, analiz, görselleştirme ve CSV kaydetme işlemleri içeriyor
+                    result = process_images(img, filename, output_folder)
 
-                # Sonuçları kaydetme
-                result = {'Image': filename, 'Result': 'Örnek Sonuç'}
-                results.append(result)
+                    # Sonuçları kaydetme (isteğe bağlı olarak görselleştirme)
+                    results.append(result)
+
+                except Exception as e:
+                    st.error(f"{filename} işlenirken hata oluştu: {str(e)}")
 
             # Progress bar'ı güncelle
             progress = (i + 1) / total_images
@@ -78,7 +79,6 @@ def analyze_images(input_folder, output_folder, progress_bar, status_text):
 
     # Sonuçları bir CSV'ye kaydet
     if results:
-        import pandas as pd
         df = pd.DataFrame(results)
         output_csv = os.path.join(output_folder, 'results.csv')
         df.to_csv(output_csv, index=False)
