@@ -1,125 +1,160 @@
-import os
-import zipfile
-import shutil
 import streamlit as st
-import time
+import os
+import cv2
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from PIL import Image
-import numpy as np
+from zipfile import ZipFile
+import shutil
 
-# Fotoğraf işleme fonksiyonları (Örneğin, damar analizi gibi)
-def process_image(image_path):
-    """Bir görsel üzerinde analiz yapar ve işlenmiş görseli döndürür"""
-    # Burada örnek bir işleme yapılır, siz kendi kodunuzu ekleyebilirsiniz
-    img = Image.open(image_path)
-    img = img.convert('RGB')  # Örneğin, RGB'ye dönüştürme
-    # Basit bir işleme örneği (gri tonlara dönüştürme)
-    img = img.convert('L')
-    return img
+from skimage.filters import frangi, meijering, threshold_multiotsu
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
 
-def create_figure_from_images(images):
-    """Görselleri 6'lı bir figürde düzenler ve döndürür"""
-    fig, axs = plt.subplots(2, 3, figsize=(15, 10))
-    axs = axs.ravel()
-    for i, img in enumerate(images):
-        axs[i].imshow(img)
-        axs[i].axis('off')  # Eksenleri gizle
-    plt.tight_layout()
-    return fig
-
-def unzip_file(uploaded_zip, extract_to):
-    """Zip dosyasını çıkartan fonksiyon"""
-    with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
-        zip_ref.extractall(extract_to)
-        return extract_to
-
-def create_zip_from_folder(folder):
-    """Bir klasörden zip dosyası oluşturur."""
-    zip_name = os.path.join(os.getcwd(), "output_results")  # Zip dosyasının adı
-    shutil.make_archive(zip_name, 'zip', folder)  # Klasörün içeriğini zip'e çevir
-    return zip_name + '.zip'  # Tam yol ile zip dosyasının yolu döndürülür
-
-def save_cluster_image(images, cluster_path):
-    """Kümeleme sonuçları için bir görsel kaydeder (örneğin 6'lı görsel grid)"""
-    fig = create_figure_from_images(images)
-    fig.savefig(cluster_path)
-    plt.close(fig)
-
-# Streamlit arayüzü
-st.title("Damar Analiz Aracı")
-
-# Zip dosyasını yüklemek
-uploaded_zip = st.file_uploader("Bir zip dosyası yükleyin", type=['zip'])
-
-if uploaded_zip is not None:
-    # Zip dosyasını geçici bir klasöre çıkart
-    temp_dir = os.path.join(os.getcwd(), 'uploaded_images')
-    os.makedirs(temp_dir, exist_ok=True)
+# === Damar analiz fonksiyonu ===
+def enhanced_vessel_detection(image):
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    clahe = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(16,16))
+    l_channel = clahe.apply(lab[:,:,0])
     
-    st.write("Zip dosyası alındı ve çözüldü...")
-    unzip_file(uploaded_zip, temp_dir)
+    thin_vessels = frangi(l_channel, sigmas=range(1,4), alpha=0.5, beta=0.5, gamma=15)
+    thick_vessels = frangi(l_channel, sigmas=range(3,8), alpha=0.5, beta=0.5, gamma=10)
+    meijering_img = meijering(l_channel, sigmas=range(1,4), black_ridges=False)
     
-    # Zip içindeki dosyaları gör
-    image_files = [f for f in os.listdir(temp_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png', '.tiff', '.tif'))]
-    st.write(f"Zip dosyasındaki görseller: {image_files}")
+    combined = 0.5*thin_vessels + 0.3*thick_vessels + 0.2*meijering_img
+    try:
+        thresholds = threshold_multiotsu(combined)
+        regions = np.digitize(combined, bins=thresholds)
+    except:
+        regions = np.digitize(combined, bins=[combined.mean()])
     
-    # Analiz et butonu
-    if st.button("Analiz Et"):
-        with st.spinner("Analiz yapılıyor... Lütfen bekleyin."):
-            # Analiz için bir progress bar
-            progress_bar = st.progress(0)
-            
-            # Görselleri işleme
-            processed_images = []
-            results = []
-            total_files = len(image_files)
-            
-            # Görselleri işleyerek analiz yap
-            for idx, image_file in enumerate(image_files):
-                img_path = os.path.join(temp_dir, image_file)
-                processed_img = process_image(img_path)
-                processed_images.append(processed_img)
-                
-                # Her görselin analizi için sonuç ekleyin (Örnek metrikler)
-                results.append({
-                    'Görüntü Adı': image_file,
-                    'Uzunluk': 123.45,  # Örnek uzunluk değeri
-                    'Kalınlık': 6.78,   # Örnek kalınlık değeri
-                    'Dallanma': 12      # Örnek dallanma değeri
-                })
-                
-                # Progress bar'ı güncelle
-                progress_bar.progress((idx + 1) / total_files)
-                time.sleep(1)  # Gerçek analizde bu gecikme kaldırılabilir
-        
-        # Sonuçları DataFrame olarak göster
-        results_df = pd.DataFrame(results)
-        st.write("Analiz Sonuçları:", results_df)
+    thin_mask = (regions == 2) if len(np.unique(regions)) > 1 else (regions == 1)
+    thick_mask = (regions >= 1)
+    return thin_mask, thick_mask, combined
 
-        # Kümeleme sonuçlarını görsel olarak oluştur
-        cluster_path = os.path.join(os.getcwd(), 'cluster.png')
-        save_cluster_image(processed_images, cluster_path)
-        st.image(cluster_path, caption="Kümeleme Sonuçları")
+# === Görselleri işleyip CSV ve görselleri üreten fonksiyon ===
+def process_images(input_folder, output_folder):
+    os.makedirs(output_folder, exist_ok=True)
+    results = []
 
-        # Sonuçları zip dosyasına ekle
-        zip_output = create_zip_from_folder(temp_dir)
-        st.write(f"Sonuçlar zip dosyası olarak oluşturuldu: {zip_output}")
+    for filename in os.listdir(input_folder):
+        if not filename.lower().endswith(('.tif', '.tiff', '.jpg', '.jpeg', '.png')):
+            continue
 
-        # Zip dosyasını indirme linki
-        with open(zip_output, "rb") as f:
-            st.download_button(
-                label="Sonuçları İndir",
-                data=f,
-                file_name="sonuclar.zip",
-                mime="application/zip"
-            )
-        
-        # İşlenmiş görsellerin küçük versiyonlarını simge olarak göster
-        st.write("İşlenmiş Görseller:")
-        for idx, img in enumerate(processed_images):
-            st.image(img, caption=f"İşlenmiş Görüntü {image_files[idx]}", width=150, use_column_width=False)
+        img = cv2.imread(os.path.join(input_folder, filename))
+        if img is None:
+            continue
 
-            # Simgeye tıklandığında büyük versiyonu yeni sekmede açmak için link
-            img_path = os.path.join(temp_dir, image_files[idx])
-            st.markdown(f'<a href="file://{img_path}" target="_blank">Büyük Görüntü</a>', unsafe_allow_html=True)
+        thin_mask, thick_mask, combined = enhanced_vessel_detection(img)
+        distance = np.zeros_like(thin_mask)
+        thickness_map = distance * np.logical_or(thin_mask, thick_mask)
+
+        thin_length = np.sum(thin_mask)
+        thick_length = np.sum(thick_mask)
+        avg_thickness = np.mean(thickness_map[np.logical_or(thin_mask, thick_mask)]) * 2
+        total_branches = len(np.unique(thin_mask)) + len(np.unique(thick_mask))
+
+        results.append({
+            'Image': filename,
+            'Uzunluk': thin_length + thick_length,
+            'İnce': thin_length,
+            'Kalın': thick_length,
+            'Kalınlık': avg_thickness,
+            'Dallanma': total_branches
+        })
+
+        fig, ax = plt.subplots(2, 3, figsize=(20, 12))
+        ax[0,0].imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        ax[0,0].set_title('Orijinal Görüntü')
+        red_vessels_image = img.copy()
+        red_vessels_image[np.logical_or(thin_mask, thick_mask)] = [0, 0, 255]
+        ax[0,1].imshow(cv2.cvtColor(red_vessels_image, cv2.COLOR_BGR2RGB))
+        ax[0,1].set_title('Kırmızı İşaretli Damarlar')
+        ax[0,2].imshow(thickness_map, cmap='jet')
+        ax[0,2].set_title('Kalınlık Haritası')
+        ax[1,0].imshow(thin_mask, cmap='gray')
+        ax[1,0].set_title(f'İnce Damarlar')
+        ax[1,1].imshow(thick_mask, cmap='gray')
+        ax[1,1].set_title(f'Kalın Damarlar')
+        ax[1,2].imshow(np.log1p(thickness_map), cmap='jet')
+        ax[1,2].set_title('Log Kalınlık Haritası')
+
+        for i in range(2):
+            for j in range(3):
+                ax[i, j].axis('off')
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(output_folder, f'result_{filename}.png'))
+        plt.close()
+
+    df = pd.DataFrame(results)
+    df.to_csv(os.path.join(output_folder, 'results.csv'), index=False)
+    return df, output_folder
+
+# === Kümeleme fonksiyonu ===
+def clustering_analysis(df, output_folder):
+    features = ['Uzunluk', 'İnce', 'Kalın', 'Kalınlık', 'Dallanma']
+    X = df[features].copy()
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X_scaled)
+    kmeans = KMeans(n_clusters=2, random_state=42)
+    clusters = kmeans.fit_predict(X_pca)
+
+    df['Küme'] = clusters
+    df['PCA1'] = X_pca[:,0]
+    df['PCA2'] = X_pca[:,1]
+
+    plt.figure(figsize=(10,7))
+    sns.scatterplot(data=df, x='PCA1', y='PCA2', hue='Küme', palette='Set1', s=100)
+    for i, row in df.iterrows():
+        plt.text(row['PCA1']+0.05, row['PCA2']+0.05, row['Image'], fontsize=9)
+
+    plt.title("Kümeleme: Görsel bazlı damar verileri")
+    plt.savefig(os.path.join(output_folder, "cluster_visualization.png"), dpi=150)
+    plt.close()
+
+    df.to_csv(os.path.join(output_folder, "clustered_vessel_data.csv"), index=False)
+
+# === Streamlit arayüzü ===
+def main():
+    st.set_page_config(page_title="Damar Analizi", layout="wide")
+    st.title("🧬 Damar Görsel Analizi")
+    uploaded = st.file_uploader("Bir zip dosyası yükleyin", type=["zip"])
+
+    if uploaded:
+        with st.spinner("Zip dosyası açılıyor..."):
+            with open("uploaded.zip", "wb") as f:
+                f.write(uploaded.getbuffer())
+            shutil.unpack_archive("uploaded.zip", "uploaded_folder")
+
+        st.success("📂 Dosyalar açıldı. Analiz başlatılıyor...")
+
+        if st.button("🔍 Analiz Et"):
+            with st.spinner("Görseller analiz ediliyor..."):
+                df, output_folder = process_images("uploaded_folder", "output")
+                clustering_analysis(df, output_folder)
+
+            st.success("✅ Analiz tamamlandı!")
+
+            st.subheader("📊 Sonuçlar")
+            st.dataframe(df)
+
+            st.subheader("📁 Analiz Görselleri")
+            for file in os.listdir(output_folder):
+                if file.endswith(".png") and file.startswith("result_"):
+                    st.image(os.path.join(output_folder, file), caption=file, use_column_width=True)
+
+            st.subheader("🔗 Kümeleme Görseli")
+            st.image(os.path.join(output_folder, "cluster_visualization.png"), use_column_width=True)
+
+            with open(os.path.join(output_folder, "results.csv"), "rb") as f:
+                st.download_button("📥 Metrikler (results.csv)", f, file_name="results.csv")
+            with open(os.path.join(output_folder, "clustered_vessel_data.csv"), "rb") as f:
+                st.download_button("📥 Küme Sonuçları (clustered.csv)", f, file_name="clustered_vessel_data.csv")
+
+if __name__ == "__main__":
+    main()
