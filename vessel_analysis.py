@@ -2,44 +2,44 @@ import cv2
 import numpy as np
 import pandas as pd
 import os
-from skimage.filters import frangi, meijering
+from skimage.filters import frangi
 from skimage.morphology import skeletonize
 from scipy.ndimage import distance_transform_edt
 from skan import Skeleton
 import logging
 
-# --- 1. HATA YÖNETİMİ ---
-logging.basicConfig(filename='vessel_analysis.log', level=logging.ERROR)
+# Streamlit cache yerine basit bir cache mekanizması
+_cache = {}
 
-# --- 2. PERFORMANS İYİLEŞTİRMELERİ ---
-@st.cache_data
 def process_single_image(img_path):
-    """Tek görüntü için optimize edilmiş damar analizi"""
+    """Optimize edilmiş damar analizi fonksiyonu"""
     try:
-        # --- GÖRÜNTÜ YÜKLEME ---
+        # Önbellek kontrolü
+        if img_path in _cache:
+            return _cache[img_path]
+            
         img = cv2.imread(img_path)
         if img is None:
             raise ValueError(f"Geçersiz görüntü: {img_path}")
+
+        # Boyut standardizasyonu
+        img = cv2.resize(img, (1024, 1024))
         
-        # --- BOYUT STANDARDİZASYONU ---
-        img = cv2.resize(img, (1024, 1024))  # Tüm görseller aynı boyutta
-        
-        # --- DAMAR TESPİTİ ---
+        # Damar tespiti
         lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
         l_channel = clahe.apply(lab[:,:,0])
         
-        # Çoklu ölçekli damar tespiti
-        thin = frangi(l_channel, sigmas=range(1,3), gamma=0.8)
-        thick = frangi(l_channel, sigmas=range(3,6), gamma=0.5)
+        thin = frangi(l_channel, sigmas=range(1,3))
+        thick = frangi(l_channel, sigmas=range(3,6))
         combined = 0.6*thin + 0.4*thick
         
-        # --- MASKELER ---
-        thresh = np.percentile(combined, 95)  # 95. persentil eşik
+        # Maskeler
+        thresh = np.percentile(combined, 95)
         thin_mask = combined > thresh
         thick_mask = combined > (thresh * 1.2)
         
-        # --- METRİK HESAPLAMA ---
+        # Metrikler
         thin_skel = skeletonize(thin_mask)
         thick_skel = skeletonize(thick_mask)
         
@@ -52,17 +52,18 @@ def process_single_image(img_path):
             "Total_Branches": len(np.unique(Skeleton(thick_skel).graph['edge'].ravel()))
         }
         
-        # --- GÖRSELLEŞTİRME ---
+        # Görselleştirme
         result_img = img.copy()
-        result_img[thin_mask] = [255, 0, 0]  # Mavi (BGR format)
-        result_img[thick_mask] = [0, 0, 255]  # Kırmızı
+        result_img[thin_mask] = [255, 0, 0]  # BGR: Mavi
+        result_img[thick_mask] = [0, 0, 255]  # BGR: Kırmızı
         
+        # Önbelleğe al
+        _cache[img_path] = (result_img, pd.DataFrame([metrics]))
         return result_img, pd.DataFrame([metrics])
         
     except Exception as e:
-        logging.error(f"{img_path} işlenirken hata: {str(e)}")
-        # Hata durumunda boş bir görsel ve sıfır değerler döndür
-        return np.zeros((256,256,3), dtype=np.uint8), pd.DataFrame({
+        logging.error(f"Hata: {str(e)}")
+        return np.zeros((256,256,3), pd.DataFrame({
             "Image": [os.path.basename(img_path)],
             "Total_Vessel_Length": [0],
             "Thin_Vessel_Length": [0],
