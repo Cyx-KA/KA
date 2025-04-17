@@ -47,12 +47,14 @@ def process_images(input_folder, output_folder):
     results = []
     processed_count = 0
     
+    # ZIP içerisindeki her görseli işle
     for filename in os.listdir(input_folder):
         if not filename.lower().endswith(('.tif', '.tiff', '.jpg', '.jpeg', '.png')):
             continue
         
         try:
-            img = cv2.imread(os.path.join(input_folder, filename))
+            img_path = os.path.join(input_folder, filename)
+            img = cv2.imread(img_path)
             if img is None:
                 continue
             
