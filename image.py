@@ -73,7 +73,7 @@ if uploaded_file:
                 status_text = st.empty()
                 
                 # Çıktı klasörü
-                output_dir = "final_vessel_analysis"
+                output_dir = "output_folder"
                 os.makedirs(output_dir, exist_ok=True)
                 
                 # Analiz işlemi
