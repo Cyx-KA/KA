@@ -106,8 +106,9 @@ def cluster_vessels(stats, num_clusters=3):
     stats['Cluster'] = clusters
     return stats, kmeans
 
-# Görselleri işleme ve sonuçları görselleştirme fonksiyonu
-def process_images(input_images, filenames):
+import os
+
+def process_images(input_images, uploaded_files):
     results = []
     processed_count = 0
     for idx, img in tqdm(enumerate(input_images), total=len(input_images), desc="Damar Analizi"):
@@ -115,6 +116,9 @@ def process_images(input_images, filenames):
             img_array = np.array(img)
             if img_array is None:
                 continue
+            
+            # Yüklenen dosyanın adından uzantısız kısmı al
+            file_name = os.path.splitext(uploaded_files[idx])[0]  # Dosya ismini kullanıyoruz
             
             # Damar tespiti
             thin_mask, thick_mask, combined = enhanced_vessel_detection(img_array)
@@ -136,7 +140,9 @@ def process_images(input_images, filenames):
                 thin_stats_with_clusters, _ = cluster_vessels(thin_stats)
                 thick_stats_with_clusters, _ = cluster_vessels(thick_stats)
                 
+                # Sonuçları kaydet
                 results.append({
+                    'Sample': file_name,  # Yüklenen dosya ismi
                     'Total_Vessel_Length': thin_length + thick_length,
                     'Thin_Vessel_Length': thin_length,
                     'Thick_Vessel_Length': thick_length,
@@ -148,14 +154,14 @@ def process_images(input_images, filenames):
                 # Görselleştirme
                 fig, ax = plt.subplots(2, 3, figsize=(20, 12))
                 ax[0,0].imshow(cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB))
-                ax[0,0].set_title(f'Orijinal Görüntü: {filenames[idx]}')
+                ax[0,0].set_title(f'Orijinal Görüntü: {file_name}')
                 
                 combined_vessels = np.logical_or(thin_mask, thick_mask)
                 red_vessels_image = img_array.copy()
                 red_vessels_image[combined_vessels] = [0, 0, 255]
                 
                 ax[0,1].imshow(cv2.cvtColor(red_vessels_image, cv2.COLOR_BGR2RGB))
-                ax[0,1].set_title(f'Kırmızı İşaretli Damarlar: {filenames[idx]}')
+                ax[0,1].set_title(f'Kırmızı İşaretli Damarlar: {file_name}')
                 
                 im = ax[0,2].imshow(thickness_map, cmap='jet')
                 plt.colorbar(im, ax=ax[0,2])
@@ -181,7 +187,7 @@ def process_images(input_images, filenames):
                 plt.savefig(output_file)
                 
                 # Görseli Streamlit'te gösterme
-                st.image(output_file, caption=f'Analiz Görseli: {filenames[idx]}', use_container_width=True)
+                st.image(output_file, caption=f'Analiz Görseli: {file_name}', use_container_width=True)
                 
                 # Görseli silme
                 os.remove(output_file)
@@ -195,6 +201,10 @@ def process_images(input_images, filenames):
     else:
         st.warning("⚠️ Hiçbir görsel işlenemedi! Girdi klasörünü ve görselleri kontrol edin.")
         return None
+
+
+
+
 
 # Streamlit GUI
 def main():
