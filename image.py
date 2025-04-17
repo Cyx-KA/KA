@@ -111,7 +111,7 @@ uploaded_file = st.file_uploader("Zip dosyasını yükleyin", type=["zip"])
 if uploaded_file:
     # ZIP dosyasını çıkar
     folder_path = extract_zip(uploaded_file)
-    st.write("Yüklenen fotoğraflar analiz edilecek...")
+    st.write(f"Yüklenen ZIP dosyasındaki fotoğraflar: {os.listdir(folder_path)}")
     
     # 'Analiz et' butonu
     if st.button("Analiz Et"):
