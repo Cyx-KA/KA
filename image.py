@@ -2,8 +2,31 @@ import os
 import zipfile
 import shutil
 import streamlit as st
-import time  # İlerleme çubuğu ve spinner için zaman gecikmesi ekleyebilmek için
+import time
 import pandas as pd
+import matplotlib.pyplot as plt
+from PIL import Image
+import numpy as np
+
+# Fotoğraf işleme fonksiyonları (Örneğin, damar analizi gibi)
+def process_image(image_path):
+    """Bir görsel üzerinde analiz yapar ve işlenmiş görseli döndürür"""
+    # Burada örnek bir işleme yapılır, siz kendi kodunuzu ekleyebilirsiniz
+    img = Image.open(image_path)
+    img = img.convert('RGB')  # Örneğin, RGB'ye dönüştürme
+    # Basit bir işleme örneği (gri tonlara dönüştürme)
+    img = img.convert('L')
+    return img
+
+def create_figure_from_images(images):
+    """Görselleri 6'lı bir figürde düzenler ve döndürür"""
+    fig, axs = plt.subplots(2, 3, figsize=(15, 10))
+    axs = axs.ravel()
+    for i, img in enumerate(images):
+        axs[i].imshow(img)
+        axs[i].axis('off')  # Eksenleri gizle
+    plt.tight_layout()
+    return fig
 
 def unzip_file(uploaded_zip, extract_to):
     """Zip dosyasını çıkartan fonksiyon"""
@@ -16,6 +39,12 @@ def create_zip_from_folder(folder):
     zip_name = os.path.join(os.getcwd(), "output_results")  # Zip dosyasının adı
     shutil.make_archive(zip_name, 'zip', folder)  # Klasörün içeriğini zip'e çevir
     return zip_name + '.zip'  # Tam yol ile zip dosyasının yolu döndürülür
+
+def save_cluster_image(images, cluster_path):
+    """Kümeleme sonuçları için bir görsel kaydeder (örneğin 6'lı görsel grid)"""
+    fig = create_figure_from_images(images)
+    fig.savefig(cluster_path)
+    plt.close(fig)
 
 # Streamlit arayüzü
 st.title("Damar Analiz Aracı")
@@ -41,17 +70,18 @@ if uploaded_zip is not None:
             # Analiz için bir progress bar
             progress_bar = st.progress(0)
             
-            # Görseller üzerinde işlem yap
+            # Görselleri işleme
+            processed_images = []
             results = []
             total_files = len(image_files)
+            
+            # Görselleri işleyerek analiz yap
             for idx, image_file in enumerate(image_files):
-                # Görselleri işle
                 img_path = os.path.join(temp_dir, image_file)
-                st.image(img_path, caption=f"Orijinal Görüntü: {image_file}")
+                processed_img = process_image(img_path)
+                processed_images.append(processed_img)
                 
-                # Burada gerçek analiz işlemleri yapılacak
-                # Örneğin damar tespiti ve metrik hesaplama
-                # Şu an sadece bir örnek işlem yapıyoruz
+                # Her görselin analizi için sonuç ekleyin (Örnek metrikler)
                 results.append({
                     'Görüntü Adı': image_file,
                     'Uzunluk': 123.45,  # Örnek uzunluk değeri
@@ -61,13 +91,18 @@ if uploaded_zip is not None:
                 
                 # Progress bar'ı güncelle
                 progress_bar.progress((idx + 1) / total_files)
-                time.sleep(1)  # Her analiz için kısa bir gecikme ekledik (gerçek analiz için kaldırılabilir)
+                time.sleep(1)  # Gerçek analizde bu gecikme kaldırılabilir
         
-        # Sonuçları göster
+        # Sonuçları DataFrame olarak göster
         results_df = pd.DataFrame(results)
         st.write("Analiz Sonuçları:", results_df)
-        
-        # Sonuçları zip dosyası olarak oluştur
+
+        # Kümeleme sonuçlarını görsel olarak oluştur
+        cluster_path = os.path.join(os.getcwd(), 'cluster.png')
+        save_cluster_image(processed_images, cluster_path)
+        st.image(cluster_path, caption="Kümeleme Sonuçları")
+
+        # Sonuçları zip dosyasına ekle
         zip_output = create_zip_from_folder(temp_dir)
         st.write(f"Sonuçlar zip dosyası olarak oluşturuldu: {zip_output}")
 
@@ -79,3 +114,12 @@ if uploaded_zip is not None:
                 file_name="sonuclar.zip",
                 mime="application/zip"
             )
+        
+        # İşlenmiş görsellerin küçük versiyonlarını simge olarak göster
+        st.write("İşlenmiş Görseller:")
+        for idx, img in enumerate(processed_images):
+            st.image(img, caption=f"İşlenmiş Görüntü {image_files[idx]}", width=150, use_column_width=False)
+
+            # Simgeye tıklandığında büyük versiyonu yeni sekmede açmak için link
+            img_path = os.path.join(temp_dir, image_files[idx])
+            st.markdown(f'<a href="file://{img_path}" target="_blank">Büyük Görüntü</a>', unsafe_allow_html=True)
