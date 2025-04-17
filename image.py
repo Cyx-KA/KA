@@ -208,7 +208,7 @@ def process_images(input_images, uploaded_files):
 
 # Streamlit GUI
 def main():
-    st.title("Damar Görüntü Analizi ve Kümeleme")
+    st.title("OVOBOARD analiz algoritması by Cyx-KA")
     
     # Görsel dosyalarını yükle
     uploaded_files = st.file_uploader("Görselleri Yükle", type=["jpg", "jpeg", "png", "tif", "tiff"], accept_multiple_files=True)
