@@ -1,7 +1,9 @@
-import streamlit as st
-import zipfile
 import os
-from process_damar_analizi import process_images  # process_damar_analizi.py dosyasından fonksiyonu içeri alıyoruz
+import time
+import zipfile
+import cv2
+import streamlit as st
+from process_damar_analizi import process_images  # Burada process_images fonksiyonunu içeri alıyoruz
 
 # Başlık
 st.title("Damar Görüntüleme ve Kümeleme")
@@ -34,48 +36,10 @@ if uploaded_file is not None:
         # Progress bar'ı başlat
         progress_bar = st.progress(0)
         status_text = st.empty()
-        
+
         st.write("Görseller işleniyor...")
-        
+
         # Görselleri işleme işlemini başlat
         analyze_images(unzip_folder, "final_vessel_analysis", progress_bar, status_text)
 
         st.write("Analiz tamamlandı!")
-
-# Görselleri analiz etme fonksiyonu
-def analyze_images(input_folder, output_folder, progress_bar, status_text):
-    # Çıktı klasörünü oluştur
-    os.makedirs(output_folder, exist_ok=True)
-    results = []
-    total_images = len([f for f in os.listdir(input_folder) if f.lower().endswith(('.tif', '.tiff', '.jpg', '.jpeg', '.png'))])
-    
-    # Görselleri sırayla işle
-    for i, filename in enumerate(os.listdir(input_folder)):
-        if filename.lower().endswith(('.tif', '.tiff', '.jpg', '.jpeg', '.png')):
-            img_path = os.path.join(input_folder, filename)
-            img = cv2.imread(img_path)
-            
-            # Görseli işleme ve analiz fonksiyonu
-            if img is not None:
-                try:
-                    # process_images fonksiyonu burada çağrılır
-                    result = process_images(img, filename, output_folder)
-
-                    # Sonuçları kaydetme (isteğe bağlı olarak görselleştirme)
-                    results.append(result)
-
-                except Exception as e:
-                    st.error(f"{filename} işlenirken hata oluştu: {str(e)}")
-
-            # Progress bar'ı güncelle
-            progress = (i + 1) / total_images
-            progress_bar.progress(progress)
-            status_text.text(f"İşlenen Görsel: {i + 1}/{total_images}")
-            time.sleep(0.1)  # Simülasyon için küçük bir uyku süresi
-
-    # Sonuçları bir CSV'ye kaydet
-    if results:
-        df = pd.DataFrame(results)
-        output_csv = os.path.join(output_folder, 'results.csv')
-        df.to_csv(output_csv, index=False)
-        st.write(f"Sonuçlar {output_csv} dosyasına kaydedildi.")
