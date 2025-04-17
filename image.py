@@ -12,6 +12,7 @@ from tqdm import tqdm
 import tempfile
 import shutil
 from sklearn.cluster import KMeans
+from skimage.morphology import remove_small_objects
 
 
 # Gelişmiş damar tespiti fonksiyonu
@@ -19,6 +20,9 @@ def enhanced_vessel_detection(image):
     lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
     l_channel = clahe.apply(lab[:,:,0])
+
+    thin_mask = remove_small_objects(thin_mask, min_size=400)
+    thick_mask = remove_small_objects(thick_mask, min_size=600)
     
     thin_vessels = frangi(l_channel, sigmas=range(1,4), alpha=0.5, beta=0.5, gamma=15)
     thick_vessels = frangi(l_channel, sigmas=range(3,8), alpha=0.5, beta=0.5, gamma=10)
