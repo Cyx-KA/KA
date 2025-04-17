@@ -135,8 +135,8 @@ def process_images(input_images, uploaded_files):
             thin_mask, thick_mask, combined = enhanced_vessel_detection(img_array)
             
             # İskelet analizi
-            thin_stats, _ = safe_skeleton_analysis(thin_mask, min_length=750)
-            thick_stats, _ = safe_skeleton_analysis(thick_mask, min_length=750)
+            thin_stats, _ = safe_skeleton_analysis(thin_mask, min_length=150)
+            thick_stats, _ = safe_skeleton_analysis(thick_mask, min_length=150)
 
         
             # Metrik hesaplama
