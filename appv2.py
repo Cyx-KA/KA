@@ -13,7 +13,6 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import plotly.express as px
-from fpdf import FPDF
 from PIL import Image
 import io
 from datetime import datetime
@@ -163,103 +162,6 @@ def perform_clustering(results, n_clusters=3):
         st.error(f"Kümeleme hatası: {str(e)}")
         results['Cluster'] = 0
         return results, None
-
-# 3. PDF RAPOR FONKSİYONLARI (Aynı bırakıldı)
-# PDF oluşturma fonksiyonunu güncelliyoruz
-def create_pdf_report(results, analysis_images, filenames, cluster_figs=None, dpi=300):
-    try:
-        class PDF(FPDF):
-            def header(self):
-                self.set_font('Arial', 'B', 12)
-                self.cell(0, 10, 'Damar Analiz Raporu', 0, 1, 'C')
-            
-            def footer(self):
-                self.set_y(-15)
-                self.set_font('Arial', 'I', 8)
-                self.cell(0, 10, f'Sayfa {self.page_no()}', 0, 0, 'C')
-
-        pdf = PDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.add_page()
-        
-        # Kapak sayfası
-        pdf.set_font('Arial', 'B', 24)
-        pdf.cell(0, 20, 'Damar Analiz Raporu', 0, 1, 'C')
-        pdf.ln(10)
-        pdf.set_font('Arial', '', 14)
-        pdf.cell(0, 10, f'Rapor Tarihi: {datetime.now().strftime("%d/%m/%Y %H:%M")}', 0, 1, 'C')
-        pdf.ln(20)
-        
-        # Sonuç tablosu
-        pdf.add_page()
-        pdf.set_font('Arial', 'B', 16)
-        pdf.cell(0, 10, 'Analiz Sonuçları', 0, 1)
-        pdf.ln(10)
-        
-        # Tablo başlıkları
-        headers = ['Örnek', 'Top.Uzun.', 'İnce Uzun.', 'Kalın Uzun.', 'Ort.Kalın.', 'Dal Say.']
-        col_widths = [40, 25, 25, 25, 25, 20]
-        
-        pdf.set_font('Arial', 'B', 10)
-        for i, header in enumerate(headers):
-            pdf.cell(col_widths[i], 10, header, 1, 0, 'C')
-        pdf.ln()
-        
-        # Tablo içeriği
-        pdf.set_font('Arial', '', 9)
-        for _, row in results.iterrows():
-            pdf.cell(col_widths[0], 10, str(row['Sample'])[:15], 1)
-            pdf.cell(col_widths[1], 10, f"{row['Total_Vessel_Length']:.1f}", 1, 0, 'C')
-            pdf.cell(col_widths[2], 10, f"{row['Thin_Vessel_Length']:.1f}", 1, 0, 'C')
-            pdf.cell(col_widths[3], 10, f"{row['Thick_Vessel_Length']:.1f}", 1, 0, 'C')
-            pdf.cell(col_widths[4], 10, f"{row['Avg_Thickness']:.2f}", 1, 0, 'C')
-            pdf.cell(col_widths[5], 10, str(row['Total_Branches']), 1, 0, 'C')
-            pdf.ln()
-        
-        # Analiz görselleri
-        for img_bytes, filename in zip(analysis_images, filenames):
-            pdf.add_page()
-            pdf.set_font('Arial', 'B', 16)
-            pdf.cell(0, 10, f'Analiz: {filename[:20]}', 0, 1)
-            pdf.ln(5)
-            
-            # Geçici dosya işlemleri
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
-                tmp.write(img_bytes)
-                tmp_path = tmp.name
-            
-            try:
-                # Görsel boyutlarını ayarla
-                img = Image.open(tmp_path)
-                img_width = 190
-                img_height = img.height * img_width / img.width
-                
-                if img_height > 250:  # Maksimum yükseklik kontrolü
-                    img_height = 250
-                    img_width = img.width * img_height / img.height
-                
-                pdf.image(tmp_path, x=(210-img_width)/2, y=30, w=img_width)
-            finally:
-                os.unlink(tmp_path)
-        
-        # Kümeleme grafikleri
-        if cluster_figs:
-            pdf.add_page()
-            pdf.set_font('Arial', 'B', 16)
-            pdf.cell(0, 10, 'Kümeleme Analizi', 0, 1)
-            pdf.ln(10)
-            
-            for fig in cluster_figs:
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
-                    fig.write_image(tmp.name, width=800, height=500, scale=2)
-                    pdf.image(tmp.name, x=10, y=pdf.get_y(), w=190)
-                    pdf.ln(100)
-                    os.unlink(tmp.name)
-        
-        return pdf
-    except Exception as e:
-        st.error(f"PDF oluşturma hatası: {str(e)}")
-        return None
         
 # 4. ANA UYGULAMA
 def main():
@@ -433,7 +335,7 @@ def main():
             status_text.empty()
             
             # Sekmeler
-            tab1, tab2, tab3, tab4 = st.tabs(["📋 Sonuçlar", "🖼️ Görseller", "📊 Grafikler", "📄 PDF Rapor"])
+            tab1, tab2, tab3 = st.tabs(["📋 Sonuçlar", "🖼️ Görseller", "📊 Grafikler"])
             
             with tab1:
                 st.dataframe(
@@ -464,39 +366,6 @@ def main():
                     
                     with col2:
                         st.plotly_chart(st.session_state.cluster_figs[3], use_container_width=True)
-            
-            with tab4:
-                if st.button("🖨️ PDF Rapor Oluştur", key="pdf_create"):
-                    with st.spinner("PDF oluşturuluyor..."):
-                        pdf = create_pdf_report(
-                            st.session_state.results,
-                            st.session_state.analysis_images,
-                            st.session_state.valid_files,
-                            st.session_state.cluster_figs[:2],  # Sadece ilk iki grafik PDF'de
-                            params['dpi']
-                        )
-                        
-                        if pdf:
-                            pdf_bytes = pdf.output(dest='S').encode('latin1')
-                            st.session_state.pdf_bytes = pdf_bytes
-                            
-                            st.download_button(
-                                "📥 PDF İndir",
-                                data=pdf_bytes,
-                                file_name=f"damar_analiz_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                                mime="application/pdf"
-                            )
-                            
-                            base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-                            pdf_display = f"""
-                            <iframe src="data:application/pdf;base64,{base64_pdf}" 
-                                    width="100%" height="800px" 
-                                    style="border:1px solid #eee;">
-                            </iframe>
-                            """
-                            st.markdown(pdf_display, unsafe_allow_html=True)
-                        else:
-                            st.error("PDF oluşturulamadı")
 
 if __name__ == "__main__":
-    main()
+    main()  
