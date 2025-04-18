@@ -278,7 +278,7 @@ def main():
             'min_vessel_size': st.slider("Min damar boyutu (piksel²)", 1, 100, 10),
             'num_clusters': st.slider("Küme sayısı", 2, 5, 3),
             'clip_limit': st.slider("CLAHE clip limit", 1.0, 8.0, 4.0),
-            'dpi': st.slider("PDF Çözünürlük (DPI)", 100, 600, 300)
+            'dpi': st.slider("Sonuç Çözünürlüğü (DPI)", 100, 600, 300)
         }
         
         st.markdown("---")
@@ -286,7 +286,7 @@ def main():
         st.markdown("**🔄 Versiyon:** 2.0")
     
     # Ana sayfa
-    st.title("🔬 OVOBOARD Damar Analiz Sistemi")
+    st.title("🔬 OVOBOARD Damar Analiz Sistemi v2.0")
     uploaded_files = st.file_uploader(
         "📁 Görselleri Yükle (JPG, PNG, TIFF)",
         type=["jpg", "jpeg", "png", "tif", "tiff"],
