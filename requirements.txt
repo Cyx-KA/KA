@@ -9,7 +9,6 @@ skan
 seaborn
 scikit-learn
 streamlit
-opencv-python-headless
 pandas
 numpy
 matplotlib
