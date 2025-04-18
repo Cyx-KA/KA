@@ -283,7 +283,7 @@ def main():
         
         st.markdown("---")
         st.markdown("**🔧 Geliştirici:** Cyx-KA")
-        st.markdown("**🔄 Versiyon:** 2.4")
+        st.markdown("**🔄 Versiyon:** 2.0")
     
     # Ana sayfa
     st.title("🔬 OVOBOARD Damar Analiz Sistemi")
